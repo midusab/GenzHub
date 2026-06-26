@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { PostDrip } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingBag, Plus, Camera, X } from 'lucide-react';
+import { ShoppingBag, Plus, Camera, X, BadgeCheck } from 'lucide-react';
 import { compressImage, formatCurrency } from '../lib/utils';
 
 export default function FeedDrip() {
@@ -35,6 +35,9 @@ export default function FeedDrip() {
 
     setUploading(true);
     try {
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      const userData = userDoc.data();
+
       const compressed = await compressImage(image);
       const storageRef = ref(storage, `drip/${Date.now()}_${image.name}`);
       await uploadBytes(storageRef, compressed);
@@ -47,6 +50,7 @@ export default function FeedDrip() {
         imageUrl: url,
         sellerId: auth.currentUser.uid,
         sellerName: auth.currentUser.displayName || 'GenZ User',
+        sellerVerified: userData?.isVerified || false,
         status: 'available',
         timestamp: Date.now()
       });
@@ -104,7 +108,12 @@ export default function FeedDrip() {
             </div>
             <div className="p-4">
               <h3 className="text-white font-medium truncate mb-1">{post.title}</h3>
-              <p className="text-gray-500 text-xs truncate">@{post.sellerName}</p>
+              <div className="flex items-center gap-1">
+                <p className="text-gray-500 text-xs truncate">@{post.sellerName}</p>
+                {post.sellerVerified && (
+                  <BadgeCheck className="w-3 h-3 text-blue-500 fill-blue-500/10" />
+                )}
+              </div>
             </div>
           </motion.div>
         ))}

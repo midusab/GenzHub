@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { PostHustle } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Briefcase, Plus, CheckCircle, ShieldCheck, X } from 'lucide-react';
+import { Briefcase, Plus, CheckCircle, ShieldCheck, X, BadgeCheck } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import axios from 'axios';
 
@@ -33,6 +33,10 @@ export default function FeedHustle() {
     if (!auth.currentUser) return;
 
     try {
+      // Fetch user profile to check verification
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      const userData = userDoc.data();
+
       await addDoc(collection(db, "posts_hustle"), {
         title,
         price: Number(price),
@@ -40,6 +44,7 @@ export default function FeedHustle() {
         type,
         sellerId: auth.currentUser.uid,
         sellerName: auth.currentUser.displayName || 'GenZ Hustler',
+        sellerVerified: userData?.isVerified || false,
         status: 'available',
         timestamp: Date.now()
       });
@@ -126,7 +131,12 @@ export default function FeedHustle() {
                   {post.type === 'gig' ? 'Gig' : 'Item'}
                 </span>
                 <h3 className="text-xl font-semibold text-white">{post.title}</h3>
-                <p className="text-gray-500 text-sm">by @{post.sellerName}</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-gray-500 text-sm">by @{post.sellerName}</p>
+                  {post.sellerVerified && (
+                    <BadgeCheck className="w-3.5 h-3.5 text-blue-500 fill-blue-500/10" />
+                  )}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-xl font-bold text-white">{formatCurrency(post.price)}</div>

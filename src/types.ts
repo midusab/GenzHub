@@ -12,6 +12,8 @@ export interface UserProfile {
   role: 'user' | 'admin';
   dripPostsCount: number;
   isPremium: boolean;
+  isVerified?: boolean;
+  isBanned?: boolean;
   createdAt: number;
 }
 
@@ -22,6 +24,8 @@ export interface PostRada {
   content: string;
   imageUrl?: string;
   category: string;
+  link?: string;
+  isApproved?: boolean;
   timestamp: number;
 }
 
@@ -33,6 +37,7 @@ export interface PostDrip {
   imageUrl: string;
   sellerId: string;
   sellerName: string;
+  sellerVerified?: boolean;
   status: 'available' | 'sold';
   timestamp: number;
 }
@@ -45,6 +50,7 @@ export interface PostHustle {
   type: 'gig' | 'item';
   sellerId: string;
   sellerName: string;
+  sellerVerified?: boolean;
   buyerId?: string;
   status: 'available' | 'escrow' | 'completed';
   timestamp: number;

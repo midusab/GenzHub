@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { PostRada } from '../types';
 import { motion } from 'motion/react';
-import { Newspaper } from 'lucide-react';
+import { Newspaper, ExternalLink, Share2, Bookmark } from 'lucide-react';
 
 export default function FeedRada() {
   const [posts, setPosts] = useState<PostRada[]>([]);
@@ -13,7 +13,8 @@ export default function FeedRada() {
     const q = query(collection(db, "posts_rada"), orderBy("timestamp", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostRada));
-      setPosts(data);
+      // Only show approved posts to general users
+      setPosts(data.filter(p => p.isApproved));
       setLoading(false);
     });
     return unsubscribe;
@@ -28,6 +29,10 @@ export default function FeedRada() {
           <Newspaper className="w-6 h-6 text-blue-500" />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-white">#Rada</h1>
+        <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Real-time RSS Active</span>
+        </div>
       </header>
 
       {posts.length === 0 && (
@@ -55,19 +60,46 @@ export default function FeedRada() {
             )}
             <div className="p-6">
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] uppercase tracking-widest font-bold text-blue-500 bg-blue-500/10 px-2 py-1 rounded">
+                <span className="text-[10px] uppercase tracking-widest font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
+                  {post.category || 'Trending'}
+                </span>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-white/5 px-2 py-1 rounded">
                   {post.source}
                 </span>
-                <span className="text-[10px] text-gray-500 font-mono">
+                <span className="text-[10px] text-gray-500 font-mono ml-auto">
                   {new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               <h2 className="text-xl font-semibold text-white mb-2 leading-snug">
                 {post.title}
               </h2>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <p className="text-gray-400 text-sm leading-relaxed mb-6">
                 {post.content}
               </p>
+              
+              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                {post.link ? (
+                  <a 
+                    href={post.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-500 text-xs font-bold uppercase tracking-widest hover:text-blue-400 transition-colors flex items-center gap-1"
+                  >
+                    Read Full Story
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">Verified Story</span>
+                )}
+                <div className="flex gap-4">
+                  <button className="text-gray-500 hover:text-white transition-colors">
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                  <button className="text-gray-500 hover:text-white transition-colors">
+                    <Bookmark className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </motion.article>
         ))}
