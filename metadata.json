@@ -1,0 +1,8 @@
+{
+  "name": "Remix: GenZHub",
+  "description": "Premium Kenyan social-marketplace featuring #Rada news, #Drip fashion, and #Hustle gig economy with Pesapal escrow integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

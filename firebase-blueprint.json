@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "GenZHub user profile and stats",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "dripPostsCount": { "type": "number" },
+        "isPremium": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "displayName", "role"]
+    },
+    "RadaPost": {
+      "title": "Rada News Post",
+      "description": "Trending news and gossip for Gen Z",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "source": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["title", "content", "timestamp"]
+    },
+    "DripPost": {
+      "title": "Drip Fashion Post",
+      "description": "Fashion marketplace listing",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["title", "price", "sellerId", "timestamp"]
+    },
+    "HustlePost": {
+      "title": "Hustle Gig Post",
+      "description": "Gig economy listing",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "type": { "type": "string", "enum": ["job", "service"] },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["title", "price", "sellerId", "timestamp"]
+    },
+    "Transaction": {
+      "title": "Payment Transaction",
+      "description": "Escrow and premium transaction logs",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "pesapalTrackingId": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "amount", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "posts_rada/{postId}": {
+      "schema": "RadaPost",
+      "description": "News feed items"
+    },
+    "posts_drip/{postId}": {
+      "schema": "DripPost",
+      "description": "Fashion marketplace items"
+    },
+    "posts_hustle/{postId}": {
+      "schema": "HustlePost",
+      "description": "Gig economy listings"
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial transaction logs"
+    }
+  }
+}

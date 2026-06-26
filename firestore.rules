@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && 
+        request.resource.data.role == 'user' &&
+        request.resource.data.dripPostsCount == 0 &&
+        request.resource.data.isPremium == false;
+      allow update: if isOwner(userId) && 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'email']) || isAdmin());
+    }
+
+    // Rada News (Admin only write)
+    match /posts_rada/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Drip Fashion (Authenticated users)
+    match /posts_drip/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.sellerId) || isAdmin();
+    }
+
+    // Hustle Gigs
+    match /posts_hustle/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.sellerId) || isOwner(resource.data.buyerId) || isAdmin();
+    }
+
+    // Transactions
+    match /transactions/{transactionId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId);
+      allow update: if isAdmin();
+    }
+  }
+}
