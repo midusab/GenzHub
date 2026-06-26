@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   User, 
   Bell, 
@@ -14,13 +14,19 @@ import {
   Info,
   X,
   Check,
-  Loader2
+  Loader2,
+  Inbox,
+  Circle,
+  FileText,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserProfile } from '../types';
+import { UserProfile, AppNotification } from '../types';
 import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, orderBy, onSnapshot, writeBatch } from 'firebase/firestore';
+import PrivacyPolicy from './PrivacyPolicy';
+import TermsOfService from './TermsOfService';
 
 interface UserSettingsProps {
   user: UserProfile;
@@ -31,8 +37,45 @@ export default function UserSettings({ user }: UserSettingsProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(user.displayName);
   const [editingPhoto, setEditingPhoto] = useState(user.photoURL || '');
+  const [editingBio, setEditingBio] = useState(user.bio || '');
+  const [facebookUrl, setFacebookUrl] = useState(user.facebookUrl || '');
+  const [instagramUrl, setInstagramUrl] = useState(user.instagramUrl || '');
+  const [twitterUrl, setTwitterUrl] = useState(user.twitterUrl || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [theme, setTheme] = useState<'midnight' | 'black'>('midnight');
+  const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user.uid) return;
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppNotification));
+      setNotificationsList(list);
+      setUnreadCount(list.filter(n => !n.isRead).length);
+    });
+
+    return unsubscribe;
+  }, [user.uid]);
+
+  const markAllAsRead = async () => {
+    if (unreadCount === 0) return;
+    try {
+      const batch = writeBatch(db);
+      notificationsList.filter(n => !n.isRead).forEach(n => {
+        const ref = doc(db, 'notifications', n.id);
+        batch.update(ref, { isRead: true });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
@@ -40,7 +83,11 @@ export default function UserSettings({ user }: UserSettingsProps) {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { 
         displayName: editingName,
-        photoURL: editingPhoto 
+        photoURL: editingPhoto,
+        bio: editingBio,
+        facebookUrl: facebookUrl,
+        instagramUrl: instagramUrl,
+        twitterUrl: twitterUrl
       });
       setActiveModal(null);
     } catch (err) {
@@ -76,6 +123,22 @@ export default function UserSettings({ user }: UserSettingsProps) {
 
   const sections = [
     {
+      title: "Inbox",
+      items: [
+        { 
+          id: 'notifications_center', 
+          label: "Notifications", 
+          icon: Inbox, 
+          color: "bg-purple-500", 
+          detail: unreadCount > 0 ? `${unreadCount} New` : "Clear",
+          onClick: () => {
+            setActiveModal('notifications');
+            markAllAsRead();
+          }
+        },
+      ]
+    },
+    {
       title: "Account",
       items: [
         { id: 'profile', label: "Personal Information", icon: User, color: "bg-blue-500", onClick: () => setActiveModal('profile') },
@@ -101,8 +164,9 @@ export default function UserSettings({ user }: UserSettingsProps) {
     {
       title: "Security & Support",
       items: [
-        { id: 'privacy', label: "Privacy & Security", icon: Shield, color: "bg-cyan-500" },
-        { id: 'help', label: "Help & Support", icon: HelpCircle, color: "bg-orange-500" },
+        { id: 'privacy', label: "Privacy Policy", icon: ShieldAlert, color: "bg-cyan-500", onClick: () => setActiveModal('privacy') },
+        { id: 'terms', label: "Terms of Service", icon: FileText, color: "bg-orange-500", onClick: () => setActiveModal('terms') },
+        { id: 'help', label: "Help & Support", icon: HelpCircle, color: "bg-blue-500" },
         { id: 'about', label: "About GenZHub", icon: Info, color: "bg-gray-400", onClick: () => setActiveModal('about') },
       ]
     }
@@ -219,6 +283,9 @@ export default function UserSettings({ user }: UserSettingsProps) {
                     {activeModal === 'profile' && "Edit Profile"}
                     {activeModal === 'premium' && "Get Premium"}
                     {activeModal === 'about' && "About GenZHub"}
+                    {activeModal === 'notifications' && "Notifications"}
+                    {activeModal === 'privacy' && "Privacy Policy"}
+                    {activeModal === 'terms' && "Terms of Service"}
                   </h2>
                   <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors text-white">
                     <X className="w-5 h-5" />
@@ -226,7 +293,7 @@ export default function UserSettings({ user }: UserSettingsProps) {
                 </div>
 
                 {activeModal === 'profile' && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-500 uppercase ml-1">Display Name</label>
                       <input 
@@ -234,6 +301,15 @@ export default function UserSettings({ user }: UserSettingsProps) {
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-500 uppercase ml-1">Bio</label>
+                      <textarea 
+                        value={editingBio}
+                        onChange={(e) => setEditingBio(e.target.value)}
+                        placeholder="Tell us about yourself..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all h-24 resize-none"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -246,10 +322,30 @@ export default function UserSettings({ user }: UserSettingsProps) {
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                       />
                     </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-500 uppercase ml-1">Facebook URL</label>
+                      <input 
+                        type="text" 
+                        placeholder="https://facebook.com/yourprofile"
+                        value={facebookUrl}
+                        onChange={(e) => setFacebookUrl(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-500 uppercase ml-1">Instagram URL</label>
+                      <input 
+                        type="text" 
+                        placeholder="https://instagram.com/yourprofile"
+                        value={instagramUrl}
+                        onChange={(e) => setInstagramUrl(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
                     <button 
                       onClick={handleUpdateProfile}
                       disabled={isUpdating}
-                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all mt-4"
                     >
                       {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                       Save Changes
@@ -280,10 +376,53 @@ export default function UserSettings({ user }: UserSettingsProps) {
                   </div>
                 )}
 
+                {activeModal === 'notifications' && (
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {notificationsList.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Bell className="w-8 h-8 text-gray-600" />
+                        </div>
+                        <p className="text-gray-500 font-medium">No notifications yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {notificationsList.map((notif) => (
+                          <div 
+                            key={notif.id}
+                            className={`p-4 rounded-2xl border transition-all ${notif.isRead ? 'bg-white/[0.02] border-white/5' : 'bg-blue-600/5 border-blue-600/20'}`}
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="font-bold text-white text-sm">{notif.title}</h4>
+                              {!notif.isRead && <Circle className="w-2 h-2 fill-blue-500 text-blue-500 mt-1" />}
+                            </div>
+                            <p className="text-xs text-gray-400 leading-relaxed mb-2">{notif.message}</p>
+                            <span className="text-[10px] text-gray-600 font-medium">
+                              {new Date(notif.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeModal === 'privacy' && (
+                  <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                    <PrivacyPolicy onBack={() => setActiveModal(null)} />
+                  </div>
+                )}
+
+                {activeModal === 'terms' && (
+                  <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                    <TermsOfService onBack={() => setActiveModal(null)} />
+                  </div>
+                )}
+
                 {activeModal === 'about' && (
                   <div className="space-y-6">
                     <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl italic text-white shadow-lg shadow-blue-600/20">Z</div>
+                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl text-white shadow-lg shadow-blue-600/20">Z</div>
                       <div>
                         <h4 className="font-bold text-white">GenZHub</h4>
                         <p className="text-xs text-gray-500">The Ultimate Hub for Kenyan Gen Z</p>
@@ -294,8 +433,18 @@ export default function UserSettings({ user }: UserSettingsProps) {
                       <p>© 2026 GenZHub Media Group. All rights reserved.</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-xs">
-                      <button className="p-3 bg-white/5 rounded-xl border border-white/5 font-medium hover:bg-white/10 text-white">Privacy Policy</button>
-                      <button className="p-3 bg-white/5 rounded-xl border border-white/5 font-medium hover:bg-white/10 text-white">Terms of Service</button>
+                      <button 
+                        onClick={() => setActiveModal('privacy')}
+                        className="p-3 bg-white/5 rounded-xl border border-white/5 font-medium hover:bg-white/10 text-white"
+                      >
+                        Privacy Policy
+                      </button>
+                      <button 
+                        onClick={() => setActiveModal('terms')}
+                        className="p-3 bg-white/5 rounded-xl border border-white/5 font-medium hover:bg-white/10 text-white"
+                      >
+                        Terms of Service
+                      </button>
                     </div>
                   </div>
                 )}

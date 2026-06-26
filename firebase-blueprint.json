@@ -12,6 +12,12 @@
         "role": { "type": "string", "enum": ["user", "admin"] },
         "dripPostsCount": { "type": "number" },
         "isPremium": { "type": "boolean" },
+        "isVerified": { "type": "boolean" },
+        "isBanned": { "type": "boolean" },
+        "facebookUrl": { "type": "string" },
+        "instagramUrl": { "type": "string" },
+        "twitterUrl": { "type": "string" },
+        "bio": { "type": "string" },
         "createdAt": { "type": "number" }
       },
       "required": ["uid", "displayName", "role"]
@@ -26,6 +32,7 @@
         "content": { "type": "string" },
         "imageUrl": { "type": "string" },
         "category": { "type": "string" },
+        "isApproved": { "type": "boolean" },
         "timestamp": { "type": "number" }
       },
       "required": ["title", "content", "timestamp"]
@@ -41,7 +48,7 @@
         "imageUrl": { "type": "string" },
         "sellerId": { "type": "string" },
         "sellerName": { "type": "string" },
-        "status": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "sold"] },
         "timestamp": { "type": "number" }
       },
       "required": ["title", "price", "sellerId", "timestamp"]
@@ -54,11 +61,11 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
-        "type": { "type": "string", "enum": ["job", "service"] },
+        "type": { "type": "string", "enum": ["gig", "item"] },
         "sellerId": { "type": "string" },
         "sellerName": { "type": "string" },
         "buyerId": { "type": "string" },
-        "status": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "escrow", "completed"] },
         "timestamp": { "type": "number" }
       },
       "required": ["title", "price", "sellerId", "timestamp"]
@@ -69,13 +76,40 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
-        "type": { "type": "string" },
+        "type": { "type": "string", "enum": ["drip_premium", "hustle_escrow", "hustle_fee"] },
         "amount": { "type": "number" },
-        "status": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
         "pesapalTrackingId": { "type": "string" },
         "timestamp": { "type": "number" }
       },
       "required": ["userId", "amount", "status", "timestamp"]
+    },
+    "Message": {
+      "title": "Global Message",
+      "description": "Messages in the global chat hub",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["senderId", "senderName", "text"]
+    },
+    "Notification": {
+      "title": "App Notification",
+      "description": "User notifications",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "title", "message", "timestamp"]
     }
   },
   "firestore": {
@@ -98,6 +132,14 @@
     "transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "Financial transaction logs"
+    },
+    "global_messages/{msgId}": {
+      "schema": "Message",
+      "description": "Global chat messages"
+    },
+    "notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "User notifications"
     }
   }
 }

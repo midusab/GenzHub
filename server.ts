@@ -68,7 +68,7 @@ app.get("/api/rada/fetch", async (req, res) => {
   try {
     const rssFeeds = [
       "https://www.standardmedia.co.ke/rss/kenya.php",
-      "https://tuko.co.ke/rss/all.xml",
+      "https://www.capitalfm.co.ke/news/feed/",
       "https://www.the-star.co.ke/rss/"
     ];
 
@@ -106,9 +106,8 @@ app.get("/api/rada/fetch", async (req, res) => {
       IMPORTANT: Respond ONLY with a JSON array of objects.`;
       
       const interaction = await ai.interactions.create({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-1.5-flash",
         input: prompt,
-        tools: [{ type: 'google_search' }],
       });
       
       let geminiText = "";

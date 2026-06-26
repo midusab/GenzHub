@@ -11,8 +11,7 @@ import {
   getDocs,
   where
 } from 'firebase/firestore';
-import { ref, set } from 'firebase/database';
-import { db, rtdb } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Settings, 
@@ -48,35 +47,52 @@ export default function AdminPanel() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [escrowHustles, setEscrowHustles] = useState<PostHustle[]>([]);
   const [isAdminRole, setIsAdminRole] = useState(false);
+  const [autoApprove, setAutoApprove] = useState(true);
 
   const ADMIN_UID = import.meta.env.VITE_ALLOWED_ADMIN_UID;
 
   useEffect(() => {
+    if (!auth.currentUser) return;
+
     // Check if current user is admin in DB
     const checkAdmin = async () => {
-      if (db && ADMIN_UID) {
-        const adminDoc = await getDocs(query(collection(db, "users"), where("uid", "==", ADMIN_UID), where("role", "==", "admin")));
-        setIsAdminRole(!adminDoc.empty);
+      const path = 'users';
+      try {
+        if (db && ADMIN_UID && auth.currentUser) {
+          const adminDoc = await getDocs(query(collection(db, path), where("uid", "==", ADMIN_UID), where("role", "==", "admin")));
+          setIsAdminRole(!adminDoc.empty);
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, path);
       }
     };
     checkAdmin();
 
     // Rada Feed Listener
-    const qRada = query(collection(db, "posts_rada"), orderBy("timestamp", "desc"));
+    const radaPath = "posts_rada";
+    const qRada = query(collection(db, radaPath), orderBy("timestamp", "desc"));
     const unsubscribeRada = onSnapshot(qRada, (snapshot) => {
       setRadaPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostRada)));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, radaPath);
     });
 
     // Users Listener
-    const qUsers = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    const usersPath = "users";
+    const qUsers = query(collection(db, usersPath), orderBy("createdAt", "desc"));
     const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, usersPath);
     });
 
     // Escrow Hustles Listener
-    const qEscrow = query(collection(db, "posts_hustle"), where("status", "==", "escrow"));
+    const hustlePath = "posts_hustle";
+    const qEscrow = query(collection(db, hustlePath), where("status", "==", "escrow"));
     const unsubscribeEscrow = onSnapshot(qEscrow, (snapshot) => {
       setEscrowHustles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostHustle)));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, hustlePath);
     });
 
     return () => {
@@ -84,33 +100,31 @@ export default function AdminPanel() {
       unsubscribeUsers();
       unsubscribeEscrow();
     };
-  }, []);
+  }, [auth.currentUser]);
 
   const handleFetchNews = async () => {
     setLoading(true);
     setMessage('Connecting to Standard Media & Nation RSS feeds + Gemini Search...');
+    const path = "posts_rada";
     try {
       const res = await axios.get('/api/rada/fetch');
       const newsItems = res.data;
       
       for (const item of newsItems) {
-        await addDoc(collection(db, "posts_rada"), {
+        await addDoc(collection(db, path), {
           ...item,
-          isApproved: false, // Start unapproved for curator review
+          isApproved: autoApprove, // Automatically approve if enabled
           timestamp: item.timestamp || Date.now()
         });
       }
 
-      try {
-        await set(ref(rtdb, 'rada_news'), newsItems.slice(0, 10));
-      } catch (rtdbErr) {
-        console.error("RTDB Sync Failed:", rtdbErr);
-      }
-
-      setMessage(`Successfully synced ${newsItems.length} live stories to review queue.`);
+      setMessage(`Successfully synced ${newsItems.length} stories. ${autoApprove ? 'All auto-approved.' : 'Pending review.'}`);
     } catch (err) {
-      console.error(err);
-      setMessage('Scraping failed. Check server logs.');
+      if (axios.isAxiosError(err)) {
+        setMessage('Scraping failed. Check server logs.');
+      } else {
+        handleFirestoreError(err, OperationType.CREATE, path);
+      }
     } finally {
       setLoading(false);
       setTimeout(() => setMessage(''), 3000);
@@ -118,39 +132,114 @@ export default function AdminPanel() {
   };
 
   // Rada Actions
-  const approveRada = async (id: string) => {
-    await updateDoc(doc(db, "posts_rada", id), { isApproved: true });
+  const approveRada = async (post: PostRada) => {
+    const path = `posts_rada/${post.id}`;
+    try {
+      await updateDoc(doc(db, "posts_rada", post.id), { isApproved: true });
+      
+      // If it's a user-submitted post (hypothetical userId field)
+      if ((post as any).userId) {
+        const notifPath = "notifications";
+        await addDoc(collection(db, notifPath), {
+          userId: (post as any).userId,
+          title: "Post Approved! 📰",
+          message: `Your story "${post.title}" has been approved and is now live on #Rada.`,
+          type: 'post_approved',
+          isRead: false,
+          timestamp: Date.now()
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
   };
   const deleteRada = async (id: string) => {
-    await deleteDoc(doc(db, "posts_rada", id));
+    const path = `posts_rada/${id}`;
+    try {
+      await deleteDoc(doc(db, "posts_rada", id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, path);
+    }
   };
 
   // User Actions
   const togglePremium = async (uid: string, currentStatus: boolean) => {
-    await updateDoc(doc(db, "users", uid), { isPremium: !currentStatus });
+    const path = `users/${uid}`;
+    try {
+      await updateDoc(doc(db, "users", uid), { isPremium: !currentStatus });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
   };
   const toggleVerified = async (uid: string, currentStatus: boolean) => {
-    await updateDoc(doc(db, "users", uid), { isVerified: !currentStatus });
+    const path = `users/${uid}`;
+    try {
+      await updateDoc(doc(db, "users", uid), { isVerified: !currentStatus });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
   };
   const toggleBan = async (uid: string, currentStatus: boolean) => {
-    await updateDoc(doc(db, "users", uid), { isBanned: !currentStatus });
+    const path = `users/${uid}`;
+    try {
+      await updateDoc(doc(db, "users", uid), { isBanned: !currentStatus });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
   };
 
   const bootstrapAdmin = async () => {
     if (ADMIN_UID) {
-      await updateDoc(doc(db, "users", ADMIN_UID), { role: 'admin' });
-      setIsAdminRole(true);
-      setMessage('Admin role bootstrapped successfully!');
+      const path = `users/${ADMIN_UID}`;
+      try {
+        await updateDoc(doc(db, "users", ADMIN_UID), { role: 'admin' });
+        setIsAdminRole(true);
+        setMessage('Admin role bootstrapped successfully!');
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, path);
+      }
     }
   };
 
   // Escrow Actions
   const resolveEscrow = async (hustleId: string, release: boolean) => {
-    await updateDoc(doc(db, "posts_hustle", hustleId), { 
-      status: release ? 'completed' : 'available',
-      buyerId: release ? undefined : null // If refunding, reset buyer
-    });
-    alert(release ? "Funds released to seller!" : "Funds refunded to buyer!");
+    const hustlePath = `posts_hustle/${hustleId}`;
+    try {
+      const hustle = escrowHustles.find(h => h.id === hustleId);
+      await updateDoc(doc(db, "posts_hustle", hustleId), { 
+        status: release ? 'completed' : 'available',
+        buyerId: release ? (hustle?.buyerId || null) : null // Keep buyer if completing, null if refunding
+      });
+
+      if (hustle) {
+        const notifPath = "notifications";
+        if (release) {
+          // Notify Seller
+          await addDoc(collection(db, notifPath), {
+            userId: hustle.sellerId,
+            title: "Escrow Resolved! ✅",
+            message: `The admin has released the funds for "${hustle.title}".`,
+            type: 'hustle_accepted',
+            isRead: false,
+            timestamp: Date.now()
+          });
+        } else if (hustle.buyerId) {
+          // Notify Buyer
+          await addDoc(collection(db, notifPath), {
+            userId: hustle.buyerId,
+            title: "Refund Processed! 💸",
+            message: `The admin has refunded your payment for "${hustle.title}".`,
+            type: 'system',
+            isRead: false,
+            timestamp: Date.now()
+          });
+        }
+      }
+      
+      alert(release ? "Funds released to seller!" : "Funds refunded to buyer!");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, hustlePath);
+    }
   };
 
   return (
@@ -161,7 +250,7 @@ export default function AdminPanel() {
             <ShieldCheck className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black italic tracking-tighter text-white">GENZHUB COMMAND</h1>
+            <h1 className="text-3xl font-black tracking-tighter text-white">GENZHUB COMMAND</h1>
             <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Admin Oversight Console</p>
           </div>
         </div>
@@ -222,15 +311,29 @@ export default function AdminPanel() {
             exit={{ opacity: 0, x: -20 }}
             className="px-6 space-y-6"
           >
-            <div className="flex justify-between items-center bg-[#1c1c1e] p-6 rounded-3xl border border-white/5">
-              <div>
+            <div className="flex flex-col md:flex-row justify-between items-center bg-[#1c1c1e] p-6 rounded-3xl border border-white/5 gap-4">
+              <div className="flex-1">
                 <h3 className="text-lg font-bold text-white">Live News Sync</h3>
                 <p className="text-gray-500 text-sm">Fetch real-time news from Standard & Nation</p>
+                <label className="flex items-center gap-2 mt-4 cursor-pointer group">
+                  <div 
+                    onClick={() => setAutoApprove(!autoApprove)}
+                    className={`w-10 h-6 rounded-full transition-all flex items-center px-1 ${autoApprove ? 'bg-green-500' : 'bg-gray-700'}`}
+                  >
+                    <motion.div 
+                      animate={{ x: autoApprove ? 16 : 0 }}
+                      className="w-4 h-4 bg-white rounded-full shadow-md" 
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover:text-white transition-colors">
+                    Auto-Approve to #Rada
+                  </span>
+                </label>
               </div>
               <button
                 onClick={handleFetchNews}
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all text-white"
+                className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all text-white shadow-xl shadow-blue-600/20 active:scale-95"
               >
                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 Run Global Rada Sync
@@ -263,7 +366,7 @@ export default function AdminPanel() {
                     </button>
                     {!post.isApproved && (
                       <button 
-                        onClick={() => approveRada(post.id)}
+                        onClick={() => approveRada(post)}
                         className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl py-2 flex items-center justify-center gap-2"
                       >
                         <Check className="w-4 h-4" /> Approve for #Rada
@@ -365,7 +468,7 @@ export default function AdminPanel() {
                       </div>
                       <div className="bg-white/5 p-3 rounded-2xl text-center">
                         <p className="text-[10px] text-gray-500 font-bold uppercase">Escrow Fund</p>
-                        <p className="text-lg font-black text-white italic">KES {h.price}</p>
+                        <p className="text-lg font-black text-white">KES {h.price}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 mb-6">

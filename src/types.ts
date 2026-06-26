@@ -14,7 +14,28 @@ export interface UserProfile {
   isPremium: boolean;
   isVerified?: boolean;
   isBanned?: boolean;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  bio?: string;
   createdAt: number;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderPhoto?: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface Chat {
+  id: string;
+  participants: string[];
+  lastMessage?: string;
+  lastTimestamp?: number;
+  unreadCount?: Record<string, number>;
 }
 
 export interface PostRada {
@@ -64,5 +85,15 @@ export interface Transaction {
   currency: 'KSh';
   status: 'pending' | 'completed' | 'failed';
   pesapalTrackingId?: string;
+  timestamp: number;
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'hustle_accepted' | 'post_approved' | 'system';
+  isRead: boolean;
   timestamp: number;
 }

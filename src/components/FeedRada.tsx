@@ -16,6 +16,9 @@ export default function FeedRada() {
       // Only show approved posts to general users
       setPosts(data.filter(p => p.isApproved));
       setLoading(false);
+    }, (err) => {
+      console.error("FeedRada Snapshot Error:", err);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);

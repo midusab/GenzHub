@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDoc, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { PostDrip } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingBag, Plus, Camera, X, BadgeCheck } from 'lucide-react';
+import { ShoppingBag, Plus, Camera, X, BadgeCheck, RefreshCw } from 'lucide-react';
 import { compressImage, formatCurrency } from '../lib/utils';
 
 export default function FeedDrip() {
@@ -25,6 +25,9 @@ export default function FeedDrip() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostDrip));
       setPosts(data);
       setLoading(false);
+    }, (err) => {
+      console.error("FeedDrip Snapshot Error:", err);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
@@ -33,11 +36,17 @@ export default function FeedDrip() {
     e.preventDefault();
     if (!image || !auth.currentUser) return;
 
-    setUploading(true);
+    // Check post limits for non-premium users
     try {
       const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       const userData = userDoc.data();
+      
+      if (!userData?.isPremium && (userData?.dripPostsCount || 0) >= 3) {
+        alert("You've reached the 3-post limit for free accounts. Upgrade to Premium for unlimited drops!");
+        return;
+      }
 
+      setUploading(true);
       const compressed = await compressImage(image);
       const storageRef = ref(storage, `drip/${Date.now()}_${image.name}`);
       await uploadBytes(storageRef, compressed);
@@ -55,6 +64,12 @@ export default function FeedDrip() {
         timestamp: Date.now()
       });
 
+      // Update post count
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(userRef, {
+        dripPostsCount: (userData?.dripPostsCount || 0) + 1
+      });
+
       setShowAdd(false);
       setTitle('');
       setPrice('');
@@ -62,6 +77,7 @@ export default function FeedDrip() {
       setImage(null);
     } catch (err) {
       console.error(err);
+      alert("Failed to post item. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -72,29 +88,45 @@ export default function FeedDrip() {
   return (
     <div className="max-w-4xl mx-auto p-4 pb-24">
       <header className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-pink-500/10 rounded-lg">
-            <ShoppingBag className="w-6 h-6 text-pink-500" />
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-blue-600/10 rounded-2xl border border-blue-600/20">
+            <ShoppingBag className="w-6 h-6 text-blue-600" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">#Drip</h1>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tighter text-white">#DRIP</h1>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded-full">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-[8px] font-black text-green-500 uppercase tracking-widest">Live</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-2">
+              Marketplace
+              <span className="w-1 h-1 bg-gray-700 rounded-full" />
+              <span className="text-white">{posts.length} Items</span>
+            </p>
+          </div>
         </div>
         <button 
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full text-sm font-bold hover:bg-white/90 transition-colors"
+          className="flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-tight hover:bg-gray-100 transition-all active:scale-95 shadow-xl shadow-white/5"
         >
-          <Plus className="w-4 h-4" /> Post Item
+          <Plus className="w-4 h-4" /> Post Drop
         </button>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {posts.map((post, idx) => (
-          <motion.div
-            key={post.id}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: idx * 0.05 }}
-            className="bg-[#1e1e1e] rounded-3xl overflow-hidden border border-white/5 group"
-          >
+        <AnimatePresence mode="popLayout">
+          {posts.map((post) => (
+            <motion.div
+              layout
+              key={post.id}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="bg-[#1e1e1e] rounded-3xl overflow-hidden border border-white/5 group shadow-xl"
+            >
             <div className="relative aspect-[4/5]">
               <img 
                 src={post.imageUrl} 
@@ -117,6 +149,7 @@ export default function FeedDrip() {
             </div>
           </motion.div>
         ))}
+        </AnimatePresence>
       </div>
 
       <AnimatePresence>
@@ -131,7 +164,7 @@ export default function FeedDrip() {
               initial={{ y: 50, scale: 0.9 }}
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 50, scale: 0.9 }}
-              className="bg-[#1e1e1e] w-full max-w-md rounded-[2.5rem] border border-white/10 overflow-hidden"
+              className="bg-[#1e1e1e] w-full max-w-md rounded-[2.5rem] border border-white/10 overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">List Your Drip</h2>
@@ -186,9 +219,14 @@ export default function FeedDrip() {
                 />
                 <button 
                   disabled={uploading}
-                  className="w-full bg-white text-black py-4 rounded-2xl font-bold disabled:opacity-50 transition-opacity"
+                  className="w-full bg-white text-black py-4 rounded-2xl font-bold disabled:opacity-50 transition-all hover:bg-white/90 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  {uploading ? 'Posting...' : 'Post for Free (1/3)'}
+                  {uploading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Uploading Drop...
+                    </>
+                  ) : 'Post for Free (1/3)'}
                 </button>
               </form>
             </motion.div>

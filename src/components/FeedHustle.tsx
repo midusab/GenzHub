@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, getDoc 
 import { db, auth } from '../lib/firebase';
 import { PostHustle } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Briefcase, Plus, CheckCircle, ShieldCheck, X, BadgeCheck } from 'lucide-react';
+import { Briefcase, Plus, CheckCircle, ShieldCheck, X, BadgeCheck, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import axios from 'axios';
 
@@ -11,6 +11,7 @@ export default function FeedHustle() {
   const [posts, setPosts] = useState<PostHustle[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -24,6 +25,9 @@ export default function FeedHustle() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostHustle));
       setPosts(data);
       setLoading(false);
+    }, (err) => {
+      console.error("FeedHustle Snapshot Error:", err);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
@@ -33,10 +37,15 @@ export default function FeedHustle() {
     if (!auth.currentUser) return;
 
     try {
-      // Fetch user profile to check verification
       const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       const userData = userDoc.data();
 
+      if (!userData?.isPremium && (userData?.dripPostsCount || 0) >= 3) {
+        alert("You've reached the 3-post limit for free accounts. Upgrade to Premium to keep posting hustles!");
+        return;
+      }
+
+      setUploading(true);
       await addDoc(collection(db, "posts_hustle"), {
         title,
         price: Number(price),
@@ -49,12 +58,21 @@ export default function FeedHustle() {
         timestamp: Date.now()
       });
 
+      // Update post count
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(userRef, {
+        dripPostsCount: (userData?.dripPostsCount || 0) + 1
+      });
+
       setShowAdd(false);
       setTitle('');
       setPrice('');
       setDesc('');
     } catch (err) {
       console.error(err);
+      alert("Failed to post hustle. Try again.");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -77,6 +95,17 @@ export default function FeedHustle() {
           status: 'escrow',
           buyerId: auth.currentUser.uid
         });
+
+        // Notify Seller
+        await addDoc(collection(db, "notifications"), {
+          userId: post.sellerId,
+          title: "New Hustle Alert! 🚀",
+          message: `${auth.currentUser.displayName} has hired you for "${post.title}". Funds are held in escrow.`,
+          type: 'hustle_accepted',
+          isRead: false,
+          timestamp: Date.now()
+        });
+
         alert(`Payment of ${formatCurrency(total)} (incl. KSh 100 fee) initiated via M-PESA. Escrow active.`);
       }
     } catch (err) {
@@ -89,6 +118,17 @@ export default function FeedHustle() {
       await updateDoc(doc(db, "posts_hustle", post.id), {
         status: 'completed'
       });
+
+      // Notify Seller
+      await addDoc(collection(db, "notifications"), {
+        userId: post.sellerId,
+        title: "Funds Released! 💰",
+        message: `Payment for "${post.title}" has been released from escrow. Check your wallet!`,
+        type: 'hustle_accepted',
+        isRead: false,
+        timestamp: Date.now()
+      });
+
       alert("Hustle completed! Funds released to seller.");
     } catch (err) {
       console.error(err);
@@ -199,7 +239,7 @@ export default function FeedHustle() {
               initial={{ y: 50, scale: 0.9 }}
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 50, scale: 0.9 }}
-              className="bg-[#1e1e1e] w-full max-w-md rounded-[2.5rem] border border-white/10 overflow-hidden"
+              className="bg-[#1e1e1e] w-full max-w-md rounded-[2.5rem] border border-white/10 overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Post a Hustle</h2>
@@ -248,9 +288,15 @@ export default function FeedHustle() {
                   required
                 />
                 <button 
-                  className="w-full bg-green-500 text-black py-4 rounded-2xl font-bold"
+                  disabled={uploading}
+                  className="w-full bg-green-500 text-black py-4 rounded-2xl font-bold hover:bg-green-400 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                  Post to #Hustle
+                  {uploading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : 'Post to #Hustle'}
                 </button>
               </form>
             </motion.div>
