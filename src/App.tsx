@@ -69,6 +69,7 @@ export default function App() {
         const userRef = doc(db, "users", firebaseUser.uid);
         
         try {
+          // Attempt to get doc. If offline, this might fail if not in cache.
           const userDoc = await getDoc(userRef);
           
           if (!userDoc.exists()) {
@@ -91,12 +92,44 @@ export default function App() {
             }
             setLoading(false);
           }, (err) => {
-            handleFirestoreError(err, OperationType.GET, path);
+            // If we are offline, onSnapshot still works with cache, but might error if it can't even start
+            if (err.code !== 'unavailable') {
+              handleFirestoreError(err, OperationType.GET, path);
+            }
             setLoading(false);
           });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, path);
-          setLoading(false);
+        } catch (err: any) {
+          // If offline and not in cache, getDoc fails. We still want to try onSnapshot for future updates.
+          if (err.code === 'unavailable' || err.message?.includes('offline')) {
+            console.warn("Firestore is offline, falling back to snapshot listener");
+            
+            // Set basic user info from auth as a fallback
+            setUser({
+              uid: firebaseUser.uid,
+              displayName: firebaseUser.displayName || 'GenZ User',
+              email: firebaseUser.email || '',
+              photoURL: firebaseUser.photoURL || '',
+              role: firebaseUser.uid === ADMIN_UID ? 'admin' : 'user',
+              dripPostsCount: 0,
+              isPremium: false,
+              createdAt: Date.now()
+            });
+
+            unsubscribeUserDoc = onSnapshot(userRef, (docSnap) => {
+              if (docSnap.exists()) {
+                setUser(docSnap.data() as UserProfile);
+              }
+              setLoading(false);
+            }, (sErr) => {
+              if (sErr.code !== 'unavailable') {
+                handleFirestoreError(sErr, OperationType.GET, path);
+              }
+              setLoading(false);
+            });
+          } else {
+            handleFirestoreError(err, OperationType.GET, path);
+            setLoading(false);
+          }
         }
       } else {
         setUser(null);

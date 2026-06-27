@@ -48,7 +48,7 @@ export interface Chat {
 export interface Transaction {
   id: string;
   userId: string;
-  type: 'drip_premium' | 'hustle_escrow' | 'hustle_fee' | 'payout';
+  type: 'drip_premium' | 'hustle_escrow' | 'drip_escrow' | 'hustle_fee' | 'payout';
   description: string;
   amount: number;
   status: 'pending' | 'completed' | 'failed' | 'escrow';
@@ -65,6 +65,18 @@ export interface PostRada {
   category: string;
   link?: string;
   isApproved?: boolean;
+  likes?: string[];
+  commentsCount?: number;
+  timestamp: number;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  text: string;
   timestamp: number;
 }
 
@@ -78,6 +90,8 @@ export interface PostDrip {
   sellerName: string;
   sellerVerified?: boolean;
   status: 'available' | 'escrow' | 'sold';
+  likes?: string[];
+  commentsCount?: number;
   timestamp: number;
 }
 
@@ -92,6 +106,8 @@ export interface PostHustle {
   sellerVerified?: boolean;
   buyerId?: string;
   status: 'available' | 'escrow' | 'completed';
+  likes?: string[];
+  commentsCount?: number;
   timestamp: number;
 }
 

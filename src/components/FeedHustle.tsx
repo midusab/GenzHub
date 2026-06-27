@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, getDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, getDoc, where, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import GenZHubPaymentGate from './GenZHubPaymentGate';
 import { PostHustle, UserProfile } from '../types';
 import { translations } from '../lib/i18n';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
-import { Briefcase, Plus, CheckCircle, ShieldCheck, X, BadgeCheck, RefreshCw, MessageSquare, TrendingUp, Zap, ArrowRight, DollarSign } from 'lucide-react';
+import { Briefcase, Plus, CheckCircle, ShieldCheck, X, BadgeCheck, RefreshCw, MessageSquare, TrendingUp, Zap, ArrowRight, DollarSign, Heart } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 
 interface FeedHustleProps {
@@ -54,6 +54,18 @@ export default function FeedHustle({ user, searchQuery, onStartChat }: FeedHustl
     });
     return unsubscribe;
   }, [activeFilter]);
+
+  const handleLike = async (postId: string, isLiked: boolean) => {
+    if (!auth.currentUser) return;
+    const postRef = doc(db, "posts_hustle", postId);
+    try {
+      await updateDoc(postRef, {
+        likes: isLiked ? arrayRemove(auth.currentUser.uid) : arrayUnion(auth.currentUser.uid)
+      });
+    } catch (error) {
+      console.error("Error toggling like:", error);
+    }
+  };
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,21 +231,32 @@ export default function FeedHustle({ user, searchQuery, onStartChat }: FeedHustl
               <div key={i} className="h-64 bg-white/5 rounded-[2.5rem] animate-pulse border border-white/5" />
             ))
           ) : (
-            filteredPosts.map((post, i) => (
-              <motion.div
-                key={post.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="group relative bg-[#0a0a0a] rounded-[2.5rem] p-8 border border-white/5 hover:border-white/20 transition-all duration-500 hover:shadow-2xl hover:shadow-green-500/5 flex flex-col h-full"
-              >
-                <div className="flex justify-between items-start mb-6">
-                   <div className="space-y-2">
-                     <div className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                        post.type === 'gig' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-purple-500/10 text-purple-500 border-purple-500/20'
-                      }`}>
-                        {post.type === 'gig' ? 'Gig Service' : 'Product Sales'}
-                     </div>
+            filteredPosts.map((post, i) => {
+              const isLiked = post.likes?.includes(auth.currentUser?.uid || '') || false;
+
+              return (
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="group relative bg-[#0a0a0a] rounded-[2.5rem] p-8 border border-white/5 hover:border-white/20 transition-all duration-500 hover:shadow-2xl hover:shadow-green-500/5 flex flex-col h-full"
+                >
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                            post.type === 'gig' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+                          }`}>
+                            {post.type === 'gig' ? 'Gig Service' : 'Product Sales'}
+                        </div>
+                        <button 
+                          onClick={() => handleLike(post.id, isLiked)}
+                          className={`p-1.5 rounded-lg transition-all border ${isLiked ? 'bg-pink-500/10 text-pink-500 border-pink-500/20' : 'bg-white/5 text-gray-500 hover:text-pink-500 border-white/5'}`}
+                        >
+                          <Heart className={`w-3 h-3 ${isLiked ? 'fill-current' : ''}`} />
+                        </button>
+                      </div>
                      <h3 className="text-2xl font-black text-white italic leading-tight uppercase tracking-tighter font-display group-hover:text-green-500 transition-colors">
                         {post.title}
                      </h3>
@@ -301,7 +324,7 @@ export default function FeedHustle({ user, searchQuery, onStartChat }: FeedHustl
                   </div>
                 </div>
               </motion.div>
-            ))
+            )})
           )}
         </AnimatePresence>
       </div>

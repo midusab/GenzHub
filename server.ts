@@ -80,7 +80,7 @@ app.get("/api/rada/fetch", async (req, res) => {
     const rssFeeds = [
       "https://www.standardmedia.co.ke/rss/kenya.php",
       "https://www.capitalfm.co.ke/news/feed/",
-      "https://nation.africa/kenya/news/-/1056/1056/-/rss/feed/index.xml"
+      "https://www.citizen.digital/rss/news"
     ];
 
     let allNews: any[] = [];
@@ -185,7 +185,7 @@ app.post("/api/checkout", async (req, res) => {
     });
 
     if (response.data.order_tracking_id) {
-      await dbAdmin.collection("pending_payments").doc(response.data.order_tracking_id).set({
+      const pendingPaymentData = {
         userId,
         type: orderType || 'escrow',
         amount,
@@ -194,6 +194,20 @@ app.post("/api/checkout", async (req, res) => {
         postType: postType || null,
         status: "pending",
         createdAt: FieldValue.serverTimestamp()
+      };
+
+      await dbAdmin.collection("pending_payments").doc(response.data.order_tracking_id).set(pendingPaymentData);
+
+      // Also create a transaction record immediately so it shows in real-time history
+      await dbAdmin.collection("transactions").doc(response.data.order_tracking_id).set({
+        userId,
+        type: orderType === 'upgrade' ? 'drip_premium' : (postType === 'drip' ? 'drip_escrow' : 'hustle_escrow'),
+        amount: -Math.abs(amount),
+        description: orderType === 'upgrade' ? 'GenZHub Premium Upgrade' : `Safe Escrow Payment`,
+        status: "pending",
+        postId: postId || null,
+        trackingId: response.data.order_tracking_id,
+        timestamp: Date.now()
       });
 
       return res.status(200).json({ 
@@ -298,6 +312,7 @@ app.get("/api/payments/webhook", async (req, res) => {
 
         // Atomic update using batch
         const batch = dbAdmin.batch();
+        const transRef = dbAdmin.collection("transactions").doc(OrderTrackingId as string);
 
         if (data?.type === 'upgrade') {
           // Upgrade user to Premium
@@ -305,6 +320,13 @@ app.get("/api/payments/webhook", async (req, res) => {
             isPremium: true,
             premiumSince: FieldValue.serverTimestamp()
           });
+
+          // Update existing transaction record
+          batch.set(transRef, {
+            status: 'completed',
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          
         } else if (data?.type === 'escrow' && data.postId) {
           const collectionName = data.postType === 'drip' ? 'posts_drip' : 'posts_hustle';
           
@@ -315,16 +337,11 @@ app.get("/api/payments/webhook", async (req, res) => {
             escrowDate: FieldValue.serverTimestamp()
           });
 
-          // Create transaction record
-          const transRef = dbAdmin.collection("transactions").doc();
+          // Update existing transaction record
           batch.set(transRef, {
-            userId: data.userId,
-            type: data.postType === 'drip' ? 'drip_escrow' : 'hustle_escrow',
-            amount: -Math.abs(data.amount), // Record as debit
-            postId: data.postId,
-            trackingId: OrderTrackingId,
-            timestamp: Date.now()
-          });
+            status: 'completed',
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
         }
 
         batch.update(paymentRef, { status: "completed", updatedAt: FieldValue.serverTimestamp() });

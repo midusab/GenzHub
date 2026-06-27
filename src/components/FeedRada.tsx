@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, doc, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { PostRada, UserProfile } from '../types';
+import { PostRada, UserProfile, PostComment } from '../types';
 import { translations } from '../lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { Newspaper, Share2, Heart, Clock, ArrowRight, Zap, TrendingUp } from 'lucide-react';
+import { Newspaper, Share2, Heart, Clock, ArrowRight, Zap, TrendingUp, MessageSquare, Send, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface FeedRadaProps {
@@ -15,6 +15,10 @@ interface FeedRadaProps {
 export default function FeedRada({ user, searchQuery }: FeedRadaProps) {
   const [posts, setPosts] = useState<PostRada[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeCommentPost, setActiveCommentPost] = useState<string | null>(null);
+  const [comments, setComments] = useState<Record<string, PostComment[]>>({});
+  const [newComment, setNewComment] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   const filteredPosts = posts.filter(post => 
     (post.title?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
@@ -35,6 +39,62 @@ export default function FeedRada({ user, searchQuery }: FeedRadaProps) {
     });
     return unsubscribe;
   }, []);
+
+  const handleLike = async (postId: string, isLiked: boolean) => {
+    const postRef = doc(db, "posts_rada", postId);
+    try {
+      await updateDoc(postRef, {
+        likes: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+      });
+    } catch (error) {
+      console.error("Error toggling like:", error);
+    }
+  };
+
+  const fetchComments = (postId: string) => {
+    if (comments[postId]) return;
+    
+    const q = query(collection(db, "posts_rada", postId, "comments"), orderBy("timestamp", "asc"));
+    onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostComment));
+      setComments(prev => ({ ...prev, [postId]: data }));
+    });
+  };
+
+  const toggleComments = (postId: string) => {
+    if (activeCommentPost === postId) {
+      setActiveCommentPost(null);
+    } else {
+      setActiveCommentPost(postId);
+      fetchComments(postId);
+    }
+  };
+
+  const handleAddComment = async (postId: string) => {
+    if (!newComment.trim()) return;
+    setSubmittingComment(true);
+    
+    try {
+      const commentData = {
+        postId,
+        userId: user.uid,
+        userName: user.displayName,
+        userPhoto: user.photoURL || null,
+        text: newComment.trim(),
+        timestamp: Date.now()
+      };
+
+      await addDoc(collection(db, "posts_rada", postId, "comments"), commentData);
+      await updateDoc(doc(db, "posts_rada", postId), {
+        commentsCount: increment(1)
+      });
+      setNewComment("");
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   return (
     <div className="space-y-12 pb-24">
@@ -81,62 +141,137 @@ export default function FeedRada({ user, searchQuery }: FeedRadaProps) {
               <div key={i} className="h-72 bg-[#0a0a0a] rounded-[3rem] animate-pulse border border-white/5" />
             ))
           ) : (
-            filteredPosts.map((post, i) => (
-              <motion.article
-                key={post.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="group relative bg-[#0a0a0a] rounded-[3rem] overflow-hidden border border-white/5 hover:border-white/20 transition-all duration-700 hover:shadow-2xl hover:shadow-blue-500/5 hover:-translate-y-1"
-              >
-                {post.imageUrl && (
-                  <div className="aspect-[16/9] overflow-hidden border-b border-white/5">
-                    <img 
-                      src={post.imageUrl} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                )}
-                <div className="p-8 space-y-6">
-                  <div className="flex justify-between items-center">
-                    <span className="px-3 py-1 bg-white/[0.03] rounded-full text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] border border-white/5">
-                      {post.category || 'Trending'}
-                    </span>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                      <button className="p-2.5 rounded-xl bg-white/5 text-gray-500 hover:text-white transition-colors border border-white/5">
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-2.5 rounded-xl bg-white/5 text-gray-500 hover:text-pink-500 transition-colors border border-white/5">
-                        <Heart className="w-3.5 h-3.5" />
-                      </button>
+            filteredPosts.map((post, i) => {
+              const isLiked = post.likes?.includes(user.uid) || false;
+              const likesCount = post.likes?.length || 0;
+              const isCommentsActive = activeCommentPost === post.id;
+
+              return (
+                <motion.article
+                  key={post.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="group relative bg-[#0a0a0a] rounded-[3rem] overflow-hidden border border-white/5 hover:border-white/20 transition-all duration-700 hover:shadow-2xl hover:shadow-blue-500/5 hover:-translate-y-1"
+                >
+                  {post.imageUrl && (
+                    <div className="aspect-[16/9] overflow-hidden border-b border-white/5">
+                      <img 
+                        src={post.imageUrl} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+                        referrerPolicy="no-referrer"
+                      />
                     </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-2xl font-black text-white italic leading-tight uppercase tracking-tighter font-display group-hover:text-blue-400 transition-colors">
-                      {post.title}
-                    </h3>
-                    <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 font-medium">
-                      {post.content}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-6 border-t border-white/5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                         <Newspaper className="w-3.5 h-3.5 text-gray-500" />
+                  )}
+                  <div className="p-8 space-y-6">
+                    <div className="flex justify-between items-center">
+                      <span className="px-3 py-1 bg-white/[0.03] rounded-full text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] border border-white/5">
+                        {post.category || 'Trending'}
+                      </span>
+                      <div className="flex gap-2">
+                        <button className="p-2.5 rounded-xl bg-white/5 text-gray-500 hover:text-white transition-colors border border-white/5">
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                          onClick={() => handleLike(post.id, isLiked)}
+                          className={`p-2.5 rounded-xl transition-all border border-white/5 flex items-center gap-2 ${isLiked ? 'bg-pink-500/10 text-pink-500 border-pink-500/20' : 'bg-white/5 text-gray-500 hover:text-pink-500'}`}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                          {likesCount > 0 && <span className="text-[10px] font-black">{likesCount}</span>}
+                        </button>
+                        <button 
+                          onClick={() => toggleComments(post.id)}
+                          className={`p-2.5 rounded-xl transition-all border border-white/5 flex items-center gap-2 ${isCommentsActive ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-white/5 text-gray-500 hover:text-blue-500'}`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          {post.commentsCount && post.commentsCount > 0 ? (
+                            <span className="text-[10px] font-black">{post.commentsCount}</span>
+                          ) : null}
+                        </button>
                       </div>
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{post.source || 'Admin'}</span>
                     </div>
-                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                      {post.timestamp ? formatDistanceToNow(new Date(post.timestamp), { addSuffix: true }) : 'Just now'}
-                    </span>
+
+                    <div className="space-y-3">
+                      <h3 className="text-2xl font-black text-white italic leading-tight uppercase tracking-tighter font-display group-hover:text-blue-400 transition-colors">
+                        {post.title}
+                      </h3>
+                      <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 font-medium">
+                        {post.content}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                           <Newspaper className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{post.source || 'Admin'}</span>
+                      </div>
+                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                        {post.timestamp ? formatDistanceToNow(new Date(post.timestamp), { addSuffix: true }) : 'Just now'}
+                      </span>
+                    </div>
+
+                    {/* Comments Section */}
+                    <AnimatePresence>
+                      {isCommentsActive && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden pt-6 space-y-4"
+                        >
+                          <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                            {comments[post.id]?.map((comment) => (
+                              <div key={comment.id} className="flex gap-3">
+                                {comment.userPhoto ? (
+                                  <img src={comment.userPhoto} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                                    <User className="w-4 h-4 text-gray-600" />
+                                  </div>
+                                )}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-white uppercase tracking-widest">{comment.userName}</span>
+                                    <span className="text-[8px] font-bold text-gray-600 uppercase tracking-widest">
+                                      {formatDistanceToNow(new Date(comment.timestamp), { addSuffix: true })}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 font-medium leading-relaxed">{comment.text}</p>
+                                </div>
+                              </div>
+                            ))}
+                            {(!comments[post.id] || comments[post.id].length === 0) && (
+                              <p className="text-[10px] font-bold text-gray-700 uppercase tracking-[0.2em] text-center py-4">No comments yet. Be the first.</p>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2 pt-2">
+                            <input 
+                              type="text"
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              placeholder="Add a comment..."
+                              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 transition-colors"
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddComment(post.id)}
+                            />
+                            <button 
+                              onClick={() => handleAddComment(post.id)}
+                              disabled={submittingComment || !newComment.trim()}
+                              className="p-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 transition-colors"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                </div>
-              </motion.article>
-            ))
+                </motion.article>
+              );
+            })
           )}
         </AnimatePresence>
       </div>

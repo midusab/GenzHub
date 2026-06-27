@@ -147,34 +147,16 @@ export default function Payments({ user }: PaymentsProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {transactions.length === 0 ? (
-                  // Mock data if empty for visual layout as requested
-                  <>
-                    <TransactionRow 
-                      type="hustle_escrow" 
-                      description="Thrifted Cargo Pants (#Drip Purchase)" 
-                      amount={-1200} 
-                      status="escrow" 
-                    />
-                    <TransactionRow 
-                      type="drip_premium" 
-                      description="Lifetime Unlimited Post Card Unlocked" 
-                      amount={-200} 
-                      status="completed" 
-                    />
-                    <TransactionRow 
-                      type="payout" 
-                      description="Campus Gig Coding Service (#Hustle)" 
-                      amount={3500} 
-                      status="completed" 
-                    />
-                    <TransactionRow 
-                      type="hustle_fee" 
-                      description="Standard Escrow Service Protection Charge" 
-                      amount={-100} 
-                      status="completed" 
-                    />
-                  </>
+                {transactions.length === 0 && !loading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-24 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Clock className="w-10 h-10 text-gray-700 mb-2" />
+                        <h4 className="text-xl font-black text-white italic uppercase tracking-tighter">No Activity Found</h4>
+                        <p className="text-xs text-gray-600 font-bold uppercase tracking-widest">Your real-time transaction history will appear here</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : (
                   transactions.map((tx) => (
                     <TransactionRow 
@@ -246,7 +228,7 @@ function TransactionRow({ type, description, amount, status }: any) {
             {isPositive ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
           </div>
           <span className="text-xs font-bold text-gray-300 uppercase tracking-tighter">
-            {type.replace('_', ' ')}
+            {type.replace(/_/g, ' ')}
           </span>
         </div>
       </td>
