@@ -6,8 +6,18 @@ import { Server } from "socket.io";
 import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
 import dotenv from "dotenv";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 dotenv.config();
+
+// Initialize Firebase Admin
+if (!getApps().length) {
+  initializeApp({
+    projectId: "gen-lang-client-0281170305"
+  });
+}
+const dbAdmin = getFirestore("ai-studio-remixgenzhub-9c13ad20-70de-487e-95d7-f2c6dbd12151");
 
 const app = express();
 const httpServer = createServer(app);
@@ -39,6 +49,7 @@ const ai = new GoogleGenAI({
 const PESAPAL_URL = "https://cybqa.pesapal.com/pesapalv3";
 const PESAPAL_KEY = process.env.PESAPAL_CONSUMER_KEY;
 const PESAPAL_SECRET = process.env.PESAPAL_CONSUMER_SECRET;
+const PESAPAL_IPN_ID = process.env.PESAPAL_IPN_ID;
 
 // Helper: Get Pesapal Auth Token
 async function getPesapalAuthToken() {
@@ -48,8 +59,8 @@ async function getPesapalAuthToken() {
       consumer_secret: PESAPAL_SECRET
     });
     return response.data.token;
-  } catch (error) {
-    console.error("Pesapal Auth Error:", error);
+  } catch (error: any) {
+    console.error("Pesapal Auth Error:", error.response?.data || error.message);
     return null;
   }
 }
@@ -69,7 +80,7 @@ app.get("/api/rada/fetch", async (req, res) => {
     const rssFeeds = [
       "https://www.standardmedia.co.ke/rss/kenya.php",
       "https://www.capitalfm.co.ke/news/feed/",
-      "https://www.the-star.co.ke/rss/"
+      "https://nation.africa/kenya/news/-/1056/1056/-/rss/feed/index.xml"
     ];
 
     let allNews: any[] = [];
@@ -106,22 +117,25 @@ app.get("/api/rada/fetch", async (req, res) => {
       IMPORTANT: Respond ONLY with a JSON array of objects.`;
       
       const interaction = await ai.interactions.create({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.5-flash",
         input: prompt,
       });
       
-      let geminiText = "";
+      let fullOutput = "";
       for (const step of interaction.steps) {
         if (step.type === 'model_output' && step.content) {
           const textContent = step.content.find((c: any) => c.type === 'text') as any;
           if (textContent && textContent.text) {
-            geminiText += textContent.text;
+            fullOutput += textContent.text;
           }
         }
       }
       
-      const cleanedText = geminiText.replace(/```json|```/g, "").trim();
-      const geminiNews = JSON.parse(cleanedText);
+      const jsonMatch = fullOutput.match(/```json\s*([\s\S]*?)\s*```/) || fullOutput.match(/([\{\[][\s\S]*[\}\]])/);
+      if (!jsonMatch) throw new Error("No JSON found in model output");
+      
+      const cleanedText = jsonMatch[1] || jsonMatch[0];
+      const geminiNews = JSON.parse(cleanedText.trim());
       allNews = [...allNews, ...geminiNews.map((n: any) => ({ ...n, timestamp: Date.now() }))];
     } catch (geminiError) {
       console.error("Gemini News Fetch failed:", geminiError);
@@ -137,25 +151,212 @@ app.get("/api/rada/fetch", async (req, res) => {
   }
 });
 
-// API: Pesapal STK Push
-app.post("/api/payments/stk-push", async (req, res) => {
-  const { amount, phoneNumber, description, accountReference } = req.body;
+// API: Checkout (User requested alias)
+app.post("/api/checkout", async (req, res) => {
+  const { userId, amount, orderType, email, firstName, lastName, postId, postType } = req.body;
   const token = await getPesapalAuthToken();
   
   if (!token) {
-    return res.status(500).json({ error: "Pesapal authentication failed" });
+    return res.status(401).json({ error: "Failed to authenticate with Pesapal system" });
   }
 
+  if (!PESAPAL_IPN_ID) {
+    return res.status(500).json({ error: "Pesapal IPN ID missing" });
+  }
+
+  const merchantReference = `GH_${Date.now()}_${userId.slice(-4)}`;
+  const orderRequest = {
+    id: merchantReference,
+    currency: "KES",
+    amount: parseFloat(amount),
+    description: orderType === 'upgrade' ? 'GenZHub Premium Upgrade' : `Hustle Escrow Payment`,
+    callback_url: process.env.PESAPAL_CALLBACK_URL || "https://ais-dev-nf6xh47x5bofeqvo46n3uw-560318932730.europe-west2.run.app/payments/callback",
+    notification_id: PESAPAL_IPN_ID,
+    billing_address: {
+      email_address: email || "customer@genzhub.co.ke",
+      first_name: firstName || "User",
+      last_name: lastName || "Customer"
+    }
+  };
+
   try {
-    // In a real sandbox, this would call the Pesapal Order request
-    // For this applet, we simulate the handshake
-    res.json({
-      status: "pending",
-      message: "STK Push initiated",
-      trackingId: `PESA_${Date.now()}`
+    const response = await axios.post(`${PESAPAL_URL}/api/Transactions/SubmitOrderRequest`, orderRequest, {
+      headers: { Authorization: `Bearer ${token}` }
     });
-  } catch (error) {
-    res.status(500).json({ error: "Payment initiation failed" });
+
+    if (response.data.order_tracking_id) {
+      await dbAdmin.collection("pending_payments").doc(response.data.order_tracking_id).set({
+        userId,
+        type: orderType || 'escrow',
+        amount,
+        merchantReference,
+        postId: postId || null,
+        postType: postType || null,
+        status: "pending",
+        createdAt: FieldValue.serverTimestamp()
+      });
+
+      return res.status(200).json({ 
+        redirect_url: response.data.redirect_url,
+        order_tracking_id: response.data.order_tracking_id 
+      });
+    } else {
+      throw new Error("Invalid response from Pesapal");
+    }
+  } catch (error: any) {
+    console.error("Checkout Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "🔒 GenZHub Safe-Gate: Could not initialize secure portal. Try again." });
+  }
+});
+
+// API: Pesapal Submit Order (legacy/internal)
+app.post("/api/payments/order", async (req, res) => {
+  const { userId, type, amount, email, firstName, lastName, postId, postType } = req.body;
+  const token = await getPesapalAuthToken();
+  
+  if (!token || !PESAPAL_IPN_ID) {
+    return res.status(500).json({ 
+      error: "Pesapal configuration error", 
+      details: !token ? "Token failed" : "IPN ID missing" 
+    });
+  }
+
+  const merchantReference = `GH_${Date.now()}_${userId.slice(-4)}`;
+
+  const orderRequest = {
+    id: merchantReference,
+    currency: "KES",
+    amount: parseFloat(amount),
+    description: type === 'upgrade' ? 'GenZHub Premium Upgrade' : `Hustle Escrow Payment`,
+    callback_url: process.env.PESAPAL_CALLBACK_URL || "https://ais-dev-nf6xh47x5bofeqvo46n3uw-560318932730.europe-west2.run.app/payments/callback",
+    notification_id: PESAPAL_IPN_ID,
+    billing_address: {
+      email_address: email,
+      first_name: firstName || "User",
+      last_name: lastName || "Customer"
+    }
+  };
+
+  try {
+    const response = await axios.post(`${PESAPAL_URL}/api/Transactions/SubmitOrderRequest`, orderRequest, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (response.data.order_tracking_id) {
+      // Record pending transaction
+      await dbAdmin.collection("pending_payments").doc(response.data.order_tracking_id).set({
+        userId,
+        type,
+        amount,
+        merchantReference,
+        postId: postId || null,
+        postType: postType || null, // 'drip' or 'hustle'
+        status: "pending",
+        createdAt: FieldValue.serverTimestamp()
+      });
+
+      res.json({
+        redirect_url: response.data.redirect_url,
+        order_tracking_id: response.data.order_tracking_id
+      });
+    } else {
+      throw new Error("Invalid response from Pesapal");
+    }
+  } catch (error: any) {
+    console.error("Submit Order Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to initiate payment" });
+  }
+});
+
+// API: Pesapal Webhook (IPN)
+app.get("/api/payments/webhook", async (req, res) => {
+  const { OrderTrackingId, OrderNotificationType } = req.query;
+
+  if (!OrderTrackingId) return res.sendStatus(400);
+
+  console.log(`IPN Received: ${OrderTrackingId} (${OrderNotificationType})`);
+
+  try {
+    const token = await getPesapalAuthToken();
+    if (!token) throw new Error("Auth failed in webhook");
+
+    const statusResponse = await axios.get(`${PESAPAL_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${OrderTrackingId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const status = statusResponse.data.payment_status_description; // "COMPLETED", "FAILED", etc.
+    
+    if (status === "COMPLETED") {
+      const paymentRef = dbAdmin.collection("pending_payments").doc(OrderTrackingId as string);
+      const paymentDoc = await paymentRef.get();
+
+      if (paymentDoc.exists) {
+        const data = paymentDoc.data();
+        if (data?.status === "completed") {
+          return res.json({ status: "already_processed" });
+        }
+
+        // Atomic update using batch
+        const batch = dbAdmin.batch();
+
+        if (data?.type === 'upgrade') {
+          // Upgrade user to Premium
+          batch.update(dbAdmin.collection("users").doc(data.userId), {
+            isPremium: true,
+            premiumSince: FieldValue.serverTimestamp()
+          });
+        } else if (data?.type === 'escrow' && data.postId) {
+          const collectionName = data.postType === 'drip' ? 'posts_drip' : 'posts_hustle';
+          
+          // Mark Post as Escrowed
+          batch.update(dbAdmin.collection(collectionName).doc(data.postId), {
+            status: 'escrow',
+            buyerId: data.userId,
+            escrowDate: FieldValue.serverTimestamp()
+          });
+
+          // Create transaction record
+          const transRef = dbAdmin.collection("transactions").doc();
+          batch.set(transRef, {
+            userId: data.userId,
+            type: data.postType === 'drip' ? 'drip_escrow' : 'hustle_escrow',
+            amount: -Math.abs(data.amount), // Record as debit
+            postId: data.postId,
+            trackingId: OrderTrackingId,
+            timestamp: Date.now()
+          });
+        }
+
+        batch.update(paymentRef, { status: "completed", updatedAt: FieldValue.serverTimestamp() });
+        await batch.commit();
+        
+        console.log(`Payment SUCCESS: ${OrderTrackingId} for user ${data?.userId}`);
+      }
+    }
+
+    res.json({ status: "ok" });
+  } catch (error: any) {
+    console.error("Webhook Processing Error:", error.message);
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
+// Utility API: Register IPN (One-time use)
+app.post("/api/payments/register-ipn", async (req, res) => {
+  const { url } = req.body;
+  const token = await getPesapalAuthToken();
+  if (!token) return res.status(500).json({ error: "Auth failed" });
+
+  try {
+    const response = await axios.post(`${PESAPAL_URL}/api/URLSetup/RegisterIPN`, {
+      url: url,
+      ipn_notification_type: "GET"
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    res.json(response.data);
+  } catch (error: any) {
+    res.status(500).json(error.response?.data || error.message);
   }
 });
 

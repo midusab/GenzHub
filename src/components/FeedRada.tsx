@@ -1,16 +1,29 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { PostRada } from '../types';
-import { motion } from 'motion/react';
-import { Newspaper, ExternalLink, Share2, Bookmark } from 'lucide-react';
+import { PostRada, UserProfile } from '../types';
+import { translations } from '../lib/i18n';
+import { motion, AnimatePresence } from 'motion/react';
+import { Newspaper, Share2, Heart, Clock, ArrowRight, Zap, TrendingUp } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
-export default function FeedRada() {
+interface FeedRadaProps {
+  user: UserProfile;
+  searchQuery: string;
+}
+
+export default function FeedRada({ user, searchQuery }: FeedRadaProps) {
   const [posts, setPosts] = useState<PostRada[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const filteredPosts = posts.filter(post => 
+    (post.title?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+    (post.content?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+    (post.category?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+  );
+
   useEffect(() => {
-    const q = query(collection(db, "posts_rada"), orderBy("timestamp", "desc"));
+    const q = query(collection(db, "posts_rada"), orderBy("timestamp", "desc"), limit(20));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostRada));
       // Only show approved posts to general users
@@ -23,90 +36,124 @@ export default function FeedRada() {
     return unsubscribe;
   }, []);
 
-  if (loading) return <div className="p-8 text-gray-500 text-center font-mono">Loading #Rada...</div>;
-
   return (
-    <div className="max-w-2xl mx-auto p-4 pb-24 space-y-6">
-      <header className="flex items-center gap-2 mb-8">
-        <div className="p-2 bg-blue-500/10 rounded-lg">
-          <Newspaper className="w-6 h-6 text-blue-500" />
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">#Rada</h1>
-        <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
-          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Real-time RSS Active</span>
-        </div>
-      </header>
-
-      {posts.length === 0 && (
-        <div className="text-center py-20 bg-[#1e1e1e] rounded-3xl border border-white/5">
-          <p className="text-gray-500">No news trending right now. Check back later!</p>
-        </div>
-      )}
-
-      <div className="grid gap-6">
-        {posts.map((post, idx) => (
-          <motion.article
-            key={post.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className="bg-[#1e1e1e] rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-colors"
-          >
-            {post.imageUrl && (
-              <img 
-                src={post.imageUrl} 
-                alt={post.title} 
-                className="w-full h-48 object-cover"
-                referrerPolicy="no-referrer"
-              />
-            )}
-            <div className="p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] uppercase tracking-widest font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
-                  {post.category || 'Trending'}
-                </span>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-white/5 px-2 py-1 rounded">
-                  {post.source}
-                </span>
-                <span className="text-[10px] text-gray-500 font-mono ml-auto">
-                  {new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <h2 className="text-xl font-semibold text-white mb-2 leading-snug">
-                {post.title}
-              </h2>
-              <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                {post.content}
-              </p>
-              
-              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                {post.link ? (
-                  <a 
-                    href={post.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-500 text-xs font-bold uppercase tracking-widest hover:text-blue-400 transition-colors flex items-center gap-1"
-                  >
-                    Read Full Story
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                ) : (
-                  <span className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">Verified Story</span>
-                )}
-                <div className="flex gap-4">
-                  <button className="text-gray-500 hover:text-white transition-colors">
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  <button className="text-gray-500 hover:text-white transition-colors">
-                    <Bookmark className="w-4 h-4" />
-                  </button>
-                </div>
+    <div className="space-y-12 pb-24">
+      {/* Featured Headline */}
+      <section className="relative group rounded-[3rem] overflow-hidden bg-[#0a0a0a] border border-white/5 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10" />
+        <div className="relative z-10 p-8 md:p-14 flex flex-col md:flex-row gap-10 items-center">
+          <div className="flex-1 space-y-8">
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Live Rada</div>
+              <div className="flex items-center gap-1.5 text-gray-600 text-[10px] font-black uppercase tracking-widest">
+                <Clock className="w-3 h-3" />
+                Updated 2m ago
               </div>
             </div>
-          </motion.article>
-        ))}
+            <h1 className="text-4xl md:text-7xl font-black text-white italic tracking-tighter leading-[0.9] uppercase font-display">
+              THE HUB <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">EVOLUTION</span> IS LIVE
+            </h1>
+            <p className="text-lg text-gray-400 font-medium max-w-xl leading-relaxed">
+              Stay ahead with the latest drops, hustles, and global Genz updates. The Rada is your official source of truth.
+            </p>
+            <div className="flex gap-4">
+              <button className="flex items-center gap-3 px-8 py-4 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-white/10 active:scale-95">
+                Explore Feed <ArrowRight className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/5 border border-white/10">
+                <TrendingUp className="w-4 h-4 text-green-500" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">+1.2k Active</span>
+              </div>
+            </div>
+          </div>
+          <div className="hidden md:flex w-1/3 aspect-square glass-card rounded-[3rem] items-center justify-center p-8 group-hover:rotate-3 transition-transform duration-1000 relative">
+             <div className="absolute inset-0 bg-blue-500/5 blur-3xl rounded-full" />
+             <Zap className="w-32 h-32 text-blue-500 animate-pulse relative z-10" />
+          </div>
+        </div>
+      </section>
+
+      {/* Post Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <AnimatePresence mode="popLayout">
+          {loading ? (
+            Array(4).fill(0).map((_, i) => (
+              <div key={i} className="h-72 bg-[#0a0a0a] rounded-[3rem] animate-pulse border border-white/5" />
+            ))
+          ) : (
+            filteredPosts.map((post, i) => (
+              <motion.article
+                key={post.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="group relative bg-[#0a0a0a] rounded-[3rem] overflow-hidden border border-white/5 hover:border-white/20 transition-all duration-700 hover:shadow-2xl hover:shadow-blue-500/5 hover:-translate-y-1"
+              >
+                {post.imageUrl && (
+                  <div className="aspect-[16/9] overflow-hidden border-b border-white/5">
+                    <img 
+                      src={post.imageUrl} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                )}
+                <div className="p-8 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <span className="px-3 py-1 bg-white/[0.03] rounded-full text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] border border-white/5">
+                      {post.category || 'Trending'}
+                    </span>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                      <button className="p-2.5 rounded-xl bg-white/5 text-gray-500 hover:text-white transition-colors border border-white/5">
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button className="p-2.5 rounded-xl bg-white/5 text-gray-500 hover:text-pink-500 transition-colors border border-white/5">
+                        <Heart className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-2xl font-black text-white italic leading-tight uppercase tracking-tighter font-display group-hover:text-blue-400 transition-colors">
+                      {post.title}
+                    </h3>
+                    <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 font-medium">
+                      {post.content}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                         <Newspaper className="w-3.5 h-3.5 text-gray-500" />
+                      </div>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{post.source || 'Admin'}</span>
+                    </div>
+                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                      {post.timestamp ? formatDistanceToNow(new Date(post.timestamp), { addSuffix: true }) : 'Just now'}
+                    </span>
+                  </div>
+                </div>
+              </motion.article>
+            ))
+          )}
+        </AnimatePresence>
       </div>
+
+      {!loading && filteredPosts.length === 0 && (
+        <div className="py-24 text-center glass-card rounded-[3rem]">
+          <div className="w-20 h-20 bg-white/5 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 border border-white/10">
+            <Newspaper className="w-10 h-10 text-gray-700" />
+          </div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic mb-2">
+            {searchQuery ? "No Results Found" : "Feed is Silent"}
+          </h2>
+          <p className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">
+            {searchQuery ? `We couldn't find anything matching "${searchQuery}"` : "Check back later for the latest Rada"}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,8 @@ export interface UserProfile {
   instagramUrl?: string;
   twitterUrl?: string;
   bio?: string;
+  language?: 'en' | 'sheng' | 'sw';
+  balance?: number;
   createdAt: number;
 }
 
@@ -28,14 +30,30 @@ export interface Message {
   senderPhoto?: string;
   text: string;
   timestamp: number;
+  type?: 'text' | 'image' | 'system';
 }
 
 export interface Chat {
   id: string;
   participants: string[];
+  participantNames?: Record<string, string>;
+  participantPhotos?: Record<string, string>;
   lastMessage?: string;
+  lastSenderId?: string;
   lastTimestamp?: number;
   unreadCount?: Record<string, number>;
+  updatedAt: number;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  type: 'drip_premium' | 'hustle_escrow' | 'hustle_fee' | 'payout';
+  description: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'failed' | 'escrow';
+  pesapalTrackingId?: string;
+  timestamp: number;
 }
 
 export interface PostRada {
@@ -59,7 +77,7 @@ export interface PostDrip {
   sellerId: string;
   sellerName: string;
   sellerVerified?: boolean;
-  status: 'available' | 'sold';
+  status: 'available' | 'escrow' | 'sold';
   timestamp: number;
 }
 
@@ -74,17 +92,6 @@ export interface PostHustle {
   sellerVerified?: boolean;
   buyerId?: string;
   status: 'available' | 'escrow' | 'completed';
-  timestamp: number;
-}
-
-export interface Transaction {
-  id: string;
-  userId: string;
-  type: 'drip_premium' | 'hustle_escrow' | 'hustle_fee';
-  amount: number;
-  currency: 'KSh';
-  status: 'pending' | 'completed' | 'failed';
-  pesapalTrackingId?: string;
   timestamp: number;
 }
 

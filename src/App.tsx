@@ -3,22 +3,29 @@ import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { signInAnonymously, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { UserProfile } from './types';
+import Sidebar from './components/Sidebar';
+import RightPanel from './components/RightPanel';
 import Navbar from './components/Navbar';
 import FeedRada from './components/FeedRada';
 import FeedDrip from './components/FeedDrip';
 import FeedHustle from './components/FeedHustle';
 import AdminPanel from './components/AdminPanel';
 import UserSettings from './components/UserSettings';
-import ChatRoom from './components/ChatRoom';
+import ChatSystem from './components/ChatSystem';
+import Payments from './components/Payments';
+import PaymentCallback from './components/PaymentCallback';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User as UserIcon, LogIn, Sparkles, Ban } from 'lucide-react';
+import { LogOut, User as UserIcon, LogIn, Sparkles, Ban, MessageSquare, Newspaper, ShoppingBag, Briefcase } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('rada');
   const [newsTicker, setNewsTicker] = useState<string[]>([]);
+  const [chatTarget, setChatTarget] = useState<UserProfile | null>(null);
+  const [showPaymentCallback, setShowPaymentCallback] = useState(window.location.pathname === '/payments/callback');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     // 2. Socket.io Stream
@@ -104,7 +111,12 @@ export default function App() {
     };
   }, [ADMIN_UID]);
 
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const handleLogin = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -112,14 +124,17 @@ export default function App() {
       console.error("Login error:", err);
       // Silent fail for common iframe/user cancellation errors
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setIsLoggingIn(false);
         return;
       }
       
       if (err.code === 'auth/admin-restricted-operation') {
         alert("This sign-in method is restricted. Please contact the administrator.");
       } else {
-        alert(`Login failed: ${err.message}. If you are in the AI Studio preview, try opening the app in a new tab.`);
+        alert(`Login failed: ${err.message}. Please ensure popups are allowed for this site. If you are in the AI Studio preview, try opening the app in a new tab.`);
       }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -147,9 +162,20 @@ export default function App() {
         </div>
         <button 
           onClick={handleLogin}
-          className="w-full bg-white text-black py-4 rounded-[2rem] font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-all active:scale-95"
+          disabled={isLoggingIn}
+          className="w-full bg-white text-black py-4 rounded-[2rem] font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
         >
-          <LogIn className="w-5 h-5" /> Get Started
+          {isLoggingIn ? (
+            <motion.div 
+              animate={{ rotate: 360 }} 
+              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+              className="w-5 h-5 border-2 border-black/10 border-t-black rounded-full"
+            />
+          ) : (
+            <>
+              <LogIn className="w-5 h-5" /> Get Started
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -183,6 +209,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121212] text-white selection:bg-white selection:text-black">
+      {showPaymentCallback && (
+        <PaymentCallback onComplete={() => {
+          setShowPaymentCallback(false);
+          window.history.replaceState({}, '', '/');
+        }} />
+      )}
+
       {/* Real-time News Ticker */}
       <div className="bg-blue-600 overflow-hidden py-1 border-b border-white/10 sticky top-0 z-[60]">
         <motion.div 
@@ -201,47 +234,123 @@ export default function App() {
         </motion.div>
       </div>
 
-      <Navbar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        isAdmin={user?.role === 'admin'} 
-        user={user}
-      />
+      <div className="flex">
+        {/* Left Sidebar - Desktop only */}
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          isAdmin={user?.role === 'admin'} 
+          user={user} 
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+        />
 
-      <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 pt-12">
-        <AnimatePresence mode="wait">
-          {activeTab === 'rada' && (
-            <motion.div key="rada" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <FeedRada />
-            </motion.div>
-          )}
-          {activeTab === 'drip' && (
-            <motion.div key="drip" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <FeedDrip />
-            </motion.div>
-          )}
-          {activeTab === 'hustle' && (
-            <motion.div key="hustle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <FeedHustle />
-            </motion.div>
-          )}
-          {activeTab === 'profile' && (
-            <motion.div key="profile" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <UserSettings user={user!} />
-            </motion.div>
-          )}
-          {activeTab === 'chat' && (
-            <motion.div key="chat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <ChatRoom user={user!} />
-            </motion.div>
-          )}
-          {activeTab === 'admin' && user?.role === 'admin' && (
-            <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminPanel />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top Navbar - Mobile and Tablet usually, hide on Desktop if Sidebar is visible */}
+          <div className="md:hidden">
+            <Navbar 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+              isAdmin={user?.role === 'admin'} 
+              user={user}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+            />
+          </div>
+
+          <main className="w-full max-w-4xl mx-auto px-4 sm:px-6 pt-8 pb-32 md:pb-12">
+            <AnimatePresence mode="wait">
+              {activeTab === 'rada' && (
+                <motion.div key="rada" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FeedRada user={user!} searchQuery={searchQuery} />
+                </motion.div>
+              )}
+              {activeTab === 'drip' && (
+                <motion.div key="drip" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FeedDrip user={user!} searchQuery={searchQuery} onStartChat={(seller) => {
+                    setChatTarget(seller as any);
+                    setActiveTab('chat');
+                  }} />
+                </motion.div>
+              )}
+              {activeTab === 'hustle' && (
+                <motion.div key="hustle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FeedHustle user={user!} searchQuery={searchQuery} onStartChat={(seller) => {
+                    setChatTarget(seller as any);
+                    setActiveTab('chat');
+                  }} />
+                </motion.div>
+              )}
+              {activeTab === 'profile' && (
+                <motion.div key="profile" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <UserSettings user={user!} />
+                </motion.div>
+              )}
+              {activeTab === 'bills' && (
+                <motion.div key="bills" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <Payments user={user!} />
+                </motion.div>
+              )}
+              {activeTab === 'chat' && (
+                <motion.div key="chat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <ChatSystem 
+                    user={user!} 
+                    lang={(user?.language || 'en') as any} 
+                    initialTarget={chatTarget}
+                    onClearTarget={() => setChatTarget(null)}
+                  />
+                </motion.div>
+              )}
+              {activeTab === 'admin' && user?.role === 'admin' && (
+                <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AdminPanel />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+        </div>
+
+        {/* Right Sidebar - Desktop only */}
+        <RightPanel 
+          user={user}
+          setActiveTab={setActiveTab}
+        />
+      </div>
+
+      {/* Bottom Navigation for Mobile */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/5 md:hidden z-[60] pb-safe">
+        <div className="flex items-center justify-around h-16">
+          <button 
+            onClick={() => setActiveTab('rada')}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'rada' ? 'text-blue-500' : 'text-gray-500'}`}
+          >
+            <Newspaper className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Rada</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('drip')}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'drip' ? 'text-pink-500' : 'text-gray-500'}`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Drip</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('hustle')}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'hustle' ? 'text-green-500' : 'text-gray-500'}`}
+          >
+            <Briefcase className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Hustle</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('chat')}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'chat' ? 'text-white' : 'text-gray-500'}`}
+          >
+            <MessageSquare className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Chat</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

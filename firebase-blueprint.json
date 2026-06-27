@@ -97,6 +97,33 @@
       },
       "required": ["senderId", "senderName", "text"]
     },
+    "ChatRoom": {
+      "title": "Private Chat Room",
+      "description": "One-on-one or group conversation",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "lastTimestamp": { "type": "number" },
+        "unreadCount": { "type": "object" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["participants", "updatedAt"]
+    },
+    "PrivateMessage": {
+      "title": "Private Message",
+      "description": "Message within a private chat room",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "type": { "type": "string", "enum": ["text", "image", "system"] }
+      },
+      "required": ["senderId", "text", "timestamp"]
+    },
     "Notification": {
       "title": "App Notification",
       "description": "User notifications",
@@ -136,6 +163,14 @@
     "global_messages/{msgId}": {
       "schema": "Message",
       "description": "Global chat messages"
+    },
+    "chats/{chatId}": {
+      "schema": "ChatRoom",
+      "description": "Active private conversations"
+    },
+    "chats/{chatId}/messages/{msgId}": {
+      "schema": "PrivateMessage",
+      "description": "Messages within a specific chat"
     },
     "notifications/{notifId}": {
       "schema": "Notification",

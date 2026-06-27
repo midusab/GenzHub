@@ -51,4 +51,4 @@ export const db = initializeFirestore(app, {
 }, firebaseConfig.firestoreDatabaseId || "(default)");
 
 export const rtdb = getDatabase(app);
-export const storage = getStorage(app);
+export const storage = getStorage(app, firebaseConfig.storageBucket);

@@ -1,20 +1,28 @@
-import { Newspaper, ShoppingBag, Briefcase, UserCircle, Shield, MessageSquare } from 'lucide-react';
+import { Newspaper, ShoppingBag, Briefcase, UserCircle, Shield, MessageSquare, CreditCard, Search, X } from 'lucide-react';
 import { UserProfile } from '../types';
+import { translations } from '../lib/i18n';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isAdmin: boolean;
   user?: UserProfile | null;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
-export default function Navbar({ activeTab, setActiveTab, isAdmin, user }: NavbarProps) {
+export default function Navbar({ activeTab, setActiveTab, isAdmin, user, searchQuery, setSearchQuery }: NavbarProps) {
+  const lang = user?.language || 'en';
+  const t = translations[lang];
+
   const tabs = [
-    { id: 'rada', label: 'Rada', icon: Newspaper },
-    { id: 'drip', label: 'Drip', icon: ShoppingBag },
-    { id: 'hustle', label: 'Hustle', icon: Briefcase },
-    { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'profile', label: 'Profile', icon: UserCircle },
+    { id: 'rada', label: t.nav.rada, icon: Newspaper },
+    { id: 'drip', label: t.nav.drip, icon: ShoppingBag },
+    { id: 'hustle', label: t.nav.hustle, icon: Briefcase },
+    { id: 'chat', label: t.nav.chat, icon: MessageSquare },
+    { id: 'bills', label: t.nav.bills, icon: CreditCard },
+    { id: 'profile', label: t.nav.profile, icon: UserCircle },
   ];
 
   if (isAdmin) {
@@ -29,7 +37,7 @@ export default function Navbar({ activeTab, setActiveTab, isAdmin, user }: Navba
           <span className="text-xl font-black tracking-tighter text-white hidden sm:block">GENZHUB</span>
         </div>
 
-        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
+        <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -48,6 +56,30 @@ export default function Navbar({ activeTab, setActiveTab, isAdmin, user }: Navba
               </button>
             );
           })}
+        </div>
+
+        <div className="flex-1 max-w-xs mx-4 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+          <input 
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
+          />
+          <AnimatePresence>
+            {searchQuery && (
+              <motion.button 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              >
+                <X className="w-3 h-3" />
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
 
         <button 

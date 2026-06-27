@@ -18,7 +18,10 @@ import {
   Inbox,
   Circle,
   FileText,
-  ShieldAlert
+  ShieldAlert,
+  Languages,
+  Languages as LanguageIcon,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, AppNotification } from '../types';
@@ -27,6 +30,7 @@ import { signOut } from 'firebase/auth';
 import { doc, updateDoc, collection, query, where, orderBy, onSnapshot, writeBatch } from 'firebase/firestore';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfService from './TermsOfService';
+import HelpSupport from './HelpSupport';
 
 interface UserSettingsProps {
   user: UserProfile;
@@ -41,6 +45,7 @@ export default function UserSettings({ user }: UserSettingsProps) {
   const [facebookUrl, setFacebookUrl] = useState(user.facebookUrl || '');
   const [instagramUrl, setInstagramUrl] = useState(user.instagramUrl || '');
   const [twitterUrl, setTwitterUrl] = useState(user.twitterUrl || '');
+  const [language, setLanguage] = useState<'en' | 'sheng' | 'sw'>(user.language || 'en');
   const [isUpdating, setIsUpdating] = useState(false);
   const [theme, setTheme] = useState<'midnight' | 'black'>('midnight');
   const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
@@ -87,7 +92,8 @@ export default function UserSettings({ user }: UserSettingsProps) {
         bio: editingBio,
         facebookUrl: facebookUrl,
         instagramUrl: instagramUrl,
-        twitterUrl: twitterUrl
+        twitterUrl: twitterUrl,
+        language: language
       });
       setActiveModal(null);
     } catch (err) {
@@ -166,7 +172,8 @@ export default function UserSettings({ user }: UserSettingsProps) {
       items: [
         { id: 'privacy', label: "Privacy Policy", icon: ShieldAlert, color: "bg-cyan-500", onClick: () => setActiveModal('privacy') },
         { id: 'terms', label: "Terms of Service", icon: FileText, color: "bg-orange-500", onClick: () => setActiveModal('terms') },
-        { id: 'help', label: "Help & Support", icon: HelpCircle, color: "bg-blue-500" },
+        { id: 'help', label: "Help & Support", icon: HelpCircle, color: "bg-blue-500", onClick: () => setActiveModal('help') },
+        { id: 'lang', label: "Language", icon: Languages, color: "bg-purple-500", onClick: () => setActiveModal('language') },
         { id: 'about', label: "About GenZHub", icon: Info, color: "bg-gray-400", onClick: () => setActiveModal('about') },
       ]
     }
@@ -286,6 +293,8 @@ export default function UserSettings({ user }: UserSettingsProps) {
                     {activeModal === 'notifications' && "Notifications"}
                     {activeModal === 'privacy' && "Privacy Policy"}
                     {activeModal === 'terms' && "Terms of Service"}
+                    {activeModal === 'help' && "Help & Support"}
+                    {activeModal === 'language' && "Language Matrix"}
                   </h2>
                   <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors text-white">
                     <X className="w-5 h-5" />
@@ -416,6 +425,57 @@ export default function UserSettings({ user }: UserSettingsProps) {
                 {activeModal === 'terms' && (
                   <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                     <TermsOfService onBack={() => setActiveModal(null)} />
+                  </div>
+                )}
+
+                {activeModal === 'help' && (
+                  <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                    <HelpSupport onBack={() => setActiveModal(null)} />
+                  </div>
+                )}
+
+                {activeModal === 'language' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-500 mb-4 px-1">Choose your preferred system visual translation style:</p>
+                    {[
+                      { id: 'en', label: 'English (Default)', desc: 'Standard, formal, and professional.', audience: 'Universal' },
+                      { id: 'sheng', label: 'Sheng / Streets', desc: 'High-energy local translation.', audience: 'Cultural Obsession' },
+                      { id: 'sw', label: 'Kiswahili', desc: 'Respectful, clear regional translation.', audience: 'Trusted & Clean' }
+                    ].map((lang) => (
+                      <button 
+                        key={lang.id}
+                        onClick={() => setLanguage(lang.id as any)}
+                        className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between group ${
+                          language === lang.id 
+                            ? 'bg-blue-600/20 border-blue-500 text-white' 
+                            : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold">{lang.label}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                              language === lang.id ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-500'
+                            }`}>
+                              {lang.audience}
+                            </span>
+                          </div>
+                          <p className="text-xs opacity-60">{lang.desc}</p>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                          language === lang.id ? 'border-blue-500 bg-blue-500' : 'border-white/10'
+                        }`}>
+                          {language === lang.id && <Check className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                      </button>
+                    ))}
+                    <button 
+                      onClick={handleUpdateProfile}
+                      disabled={isUpdating}
+                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all mt-6 shadow-xl shadow-blue-600/20"
+                    >
+                      {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Apply Language Settings"}
+                    </button>
                   </div>
                 )}
 
