@@ -185,8 +185,8 @@ export default function App() {
     <div className="min-h-screen bg-[#121212] flex items-center justify-center p-6">
       <div className="max-w-sm w-full text-center space-y-8">
         <div className="relative inline-block">
-          <div className="w-24 h-24 bg-gradient-to-tr from-white to-gray-500 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-white/10 mx-auto">
-            <Sparkles className="w-12 h-12 text-[#121212]" />
+          <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-white/10 mx-auto border border-white/5">
+            <img src="/logo.png" className="w-full h-full object-cover" alt="GenZHub Logo" />
           </div>
         </div>
         <div>

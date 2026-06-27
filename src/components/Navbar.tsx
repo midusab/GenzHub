@@ -33,7 +33,9 @@ export default function Navbar({ activeTab, setActiveTab, isAdmin, user, searchQ
     <nav className="sticky top-0 w-full z-50 bg-black/80 backdrop-blur-xl border-b border-white/5">
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('rada')}>
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl text-white shadow-lg shadow-blue-600/20">Z</div>
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-blue-600/20 border border-white/5">
+            <img src="/logo.png" className="w-full h-full object-cover" alt="Logo" />
+          </div>
           <span className="text-xl font-black tracking-tighter text-white hidden sm:block">GENZHUB</span>
         </div>
 

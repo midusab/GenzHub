@@ -37,10 +37,10 @@ export default function Sidebar({ activeTab, setActiveTab, isAdmin, user, search
       <div className="p-8">
         <div className="flex items-center gap-4 cursor-pointer group" onClick={() => setActiveTab('rada')}>
           <div className="relative">
-            <div className="w-12 h-12 bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-2xl shadow-blue-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-              Z
+            <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-2xl shadow-blue-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 border border-white/10">
+              <img src="/logo.png" className="w-full h-full object-cover" alt="GenZHub Logo" />
             </div>
-            <div className="absolute -inset-1 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
+            <div className="absolute -inset-1 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl blur opacity-10 group-hover:opacity-30 transition-opacity" />
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-black tracking-tighter text-white font-display">GENZHUB</span>
