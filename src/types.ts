@@ -19,7 +19,6 @@ export interface UserProfile {
   twitterUrl?: string;
   bio?: string;
   language?: 'en' | 'sheng' | 'sw';
-  balance?: number;
   createdAt: number;
 }
 
@@ -66,6 +65,9 @@ export interface PostRada {
   link?: string;
   isApproved?: boolean;
   likes?: string[];
+  bookmarks?: string[];
+  reshares?: string[];
+  likesCount?: number;
   commentsCount?: number;
   timestamp: number;
 }
@@ -78,6 +80,7 @@ export interface PostComment {
   userPhoto?: string;
   text: string;
   timestamp: number;
+  parentId?: string;
 }
 
 export interface PostDrip {

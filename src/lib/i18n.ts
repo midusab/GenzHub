@@ -19,7 +19,6 @@ export const translations = {
       save: 'Save Changes'
     },
     payments: {
-      balance: 'Simulated Balance',
       history: 'Transaction History',
       status: 'Account Status',
       free: 'Free Tier Account',
@@ -52,7 +51,6 @@ export const translations = {
       save: 'Weka Set'
     },
     payments: {
-      balance: 'Ganji Iko',
       history: 'Story za Ganji',
       status: 'Cheo Yako',
       free: 'User wa Kawaida',
@@ -85,7 +83,6 @@ export const translations = {
       save: 'Hifadhi'
     },
     payments: {
-      balance: 'Salio Lako',
       history: 'Historia ya Malipo',
       status: 'Hali ya Akaunti',
       free: 'Akaunti ya Bure',

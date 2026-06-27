@@ -53,7 +53,7 @@ export default function RightPanel({ user, setActiveTab }: RightPanelProps) {
             
             <div className="space-y-1">
               <h4 className="text-xl font-black text-white leading-tight uppercase italic tracking-tighter font-display">THE ELITE PASS</h4>
-              <p className="text-[10px] text-gray-400 font-bold leading-relaxed uppercase tracking-widest">Join 500+ verified hustlers</p>
+              <p className="text-[10px] text-gray-400 font-bold leading-relaxed uppercase tracking-widest">Join the verified hustlers</p>
             </div>
 
             <div className="space-y-3">
@@ -104,7 +104,6 @@ export default function RightPanel({ user, setActiveTab }: RightPanelProps) {
                 <p className="text-[11px] font-black text-white truncate uppercase tracking-tight font-display">{item.title}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] px-2 py-0.5 bg-pink-500/10 text-pink-500 rounded-full font-black uppercase tracking-tighter italic">KES {item.price}</span>
-                  <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest">34 VIEWS</span>
                 </div>
               </div>
             </motion.div>

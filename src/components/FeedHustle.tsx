@@ -309,7 +309,12 @@ export default function FeedHustle({ user, searchQuery, onStartChat }: FeedHustl
                                <MessageSquare className="w-5 h-5 mx-auto" />
                             </button>
                           </div>
-                          <GenZHubPaymentGate mode="escrow" itemPrice={post.price} />
+                          <GenZHubPaymentGate 
+                            mode="escrow" 
+                            itemPrice={post.price} 
+                            itemName={post.title}
+                            sellerName={post.sellerName}
+                          />
                         </div>
                       )}
 

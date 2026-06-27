@@ -362,7 +362,12 @@ export default function FeedDrip({ user, searchQuery, onStartChat }: FeedDripPro
                     <div className="flex-1">
                        <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Price</p>
                        <p className="text-4xl font-black text-white italic tracking-tighter leading-none mb-6">KES {selectedPost.price}</p>
-                       <GenZHubPaymentGate mode="escrow" itemPrice={selectedPost.price} />
+                       <GenZHubPaymentGate 
+                         mode="escrow" 
+                         itemPrice={selectedPost.price} 
+                         itemName={selectedPost.title}
+                         sellerName={selectedPost.sellerName}
+                       />
                     </div>
                     <button 
                       onClick={(e) => handleLike(e, selectedPost.id, selectedPost.likes?.includes(auth.currentUser?.uid || '') || false)}

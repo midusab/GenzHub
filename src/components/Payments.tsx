@@ -101,20 +101,23 @@ export default function Payments({ user }: PaymentsProps) {
         
         <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
           <div>
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">{t.payments.balance}</p>
-            <h2 className="text-4xl md:text-5xl font-black text-white italic tracking-tighter">
-              {formatAmount(user.balance || 4250)}
-            </h2>
-            <div className="flex items-center gap-2 mt-4">
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">{t.payments.status}</p>
+            <div className="flex items-center gap-4 mt-2">
               {user.isPremium ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-full">
-                  <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                  <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest">👑 {t.payments.premium}</span>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase">{t.payments.premium}</h2>
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-full w-fit">
+                    <Zap className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                    <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest">Active Member</span>
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-                  <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t.payments.free} [{user.dripPostsCount || 0}/3 Posts]</span>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase">{t.payments.free}</h2>
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-full w-fit">
+                    <ShieldCheck className="w-3 h-3 text-gray-500" />
+                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Standard Access [{user.dripPostsCount || 0}/3 Posts]</span>
+                  </div>
                 </div>
               )}
             </div>
